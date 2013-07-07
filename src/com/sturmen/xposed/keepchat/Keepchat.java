@@ -211,8 +211,8 @@ public class Keepchat implements IXposedHookLoadPackage {
      * similar to callMethod(). Furthermore, the exceptions from getMethod() are passed on.
      * See http://forum.xda-developers.com/showpost.php?p=42598280&postcount=1753
      */
-    private Object callSuperMethod(Object obj, String methodName, Object... objects) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        return obj.getClass().getMethod(methodName).invoke(obj, objects);
+    private Object callSuperMethod(Object obj, String methodName) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        return obj.getClass().getMethod(methodName).invoke(obj);
     }
 
 }
