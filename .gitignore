@@ -1,0 +1,9 @@
+*.iml
+*.iws
+*.ipr
+.idea/
+local.properties
+
+gen/
+
+*.apk
