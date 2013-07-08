@@ -30,7 +30,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		if (!lpparam.packageName.equals("com.snapchat.android"))
 			return;
 		else
-			XposedBridge.log("We are in Snapchat!");
+			XposedBridge.log("Keepchat: Snapchat load detected.");
 
 		/*
 		 * getImageBitmap(Context) hook
@@ -131,9 +131,9 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * it is merely for the benefit of the user to know that our hooks
 		 * are working.
 		 */
-		findAndHookMethod("com.snapchat.android.FeedActivity", lpparam.classLoader, "showVideo", new XC_MethodHook() {
+		findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-				Context context = ((Activity) param.thisObject).getApplicationContext();
+				Context context = (Context) param.args[0];
 				//construct a toast notification telling the user it was successful
 				CharSequence text = "Saved video snap to SD card.";
 				Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
