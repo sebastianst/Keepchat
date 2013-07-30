@@ -15,8 +15,10 @@ import java.util.Locale;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Environment;
 import android.widget.Toast;
+import android.media.MediaScannerConnection;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -25,6 +27,7 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 public class Keepchat implements IXposedHookLoadPackage {
+	private String videoPath;
 
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		if (!lpparam.packageName.equals("com.snapchat.android"))
@@ -93,6 +96,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 				String videoUri = (String) param.getResult();
 				XposedBridge.log("Video is at " + videoUri);
 				File file = constructFileObject(param.thisObject, "mp4");
+				videoPath = file.getCanonicalPath();
 				try {
 					//make a new input stream from the video URI
 					FileInputStream in = new FileInputStream (new File(videoUri));
@@ -134,14 +138,15 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * are working.
 		 */
 		findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
-			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 				Context context = (Context) param.args[0];
 				//construct a toast notification telling the user it was successful
-				CharSequence text = "Saved video snap to SD card.";
+				CharSequence text = "Saved video to " + videoPath;
 				Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
 				//display the toast for the user
 				toast.show();
 				XposedBridge.log("Video Toast displayed successfully.");
+				runMediaScan(context, videoPath);
 			}
 		});
 		/*
@@ -168,6 +173,7 @@ public class Keepchat implements IXposedHookLoadPackage {
     */
     private void runMediaScan(Context context, String filename) {
         try {
+        	XposedBridge.log("MediaScanner running: " + filename);
             // Run MediaScanner on file, so it shows up in Gallery instantly
             MediaScannerConnection.scanFile(context,
                     new String[]{filename}, null,
