@@ -64,6 +64,8 @@ public class Keepchat implements IXposedHookLoadPackage {
 					//display the toast for the user
 					toast.show();
 					XposedBridge.log("Image Toast displayed successfully.");
+                    // Run a media scan, so it shows up in gallery
+                    runMediaScan(context, file.getCanonicalPath());
 				} catch (Exception e) {
 					XposedBridge.log("Error occured while saving the file.");
 					e.printStackTrace();
@@ -159,6 +161,31 @@ public class Keepchat implements IXposedHookLoadPackage {
 			}
 		});
 	}
+   /*
+    * runMediaScan (Context context, String filename) private method
+    * context is simply the context
+    * filename is the file you want to be scanned
+    */
+    private void runMediaScan(Context context, String filename) {
+        try {
+            // Run MediaScanner on file, so it shows up in Gallery instantly
+            MediaScannerConnection.scanFile(context,
+                    new String[]{filename}, null,
+                    new MediaScannerConnection.OnScanCompletedListener() {
+                        public void onScanCompleted(String path, Uri uri) {
+                            if (uri != null) {
+                                XposedBridge.log("MediaScanner ran successfully: " + uri.toString());
+                            } else {
+                                XposedBridge.log("Unknown error occurred while trying to run MediaScanner");
+                            }
+                        }
+                    });
+        } catch (Exception e) {
+            XposedBridge.log("Error occurred while trying to run MediaScanner");
+            e.printStackTrace();
+        }
+    }
+
     /*
      * constructFileObject(Object snapObject, String suffix) private method
      * Return a File object to safe the image/video.
