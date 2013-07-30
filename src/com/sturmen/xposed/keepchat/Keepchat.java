@@ -1,24 +1,19 @@
 package com.sturmen.xposed.keepchat;
 
-import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
-import static de.robv.android.xposed.XposedHelpers.callMethod;
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
+import android.os.Environment;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-
 import java.lang.reflect.InvocationTargetException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-
-import android.app.Activity;
-import android.content.Context;
-import android.graphics.Bitmap;
-import android.net.Uri;
-import android.os.Environment;
-import android.widget.Toast;
-import android.media.MediaScannerConnection;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -26,7 +21,15 @@ import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
+import static de.robv.android.xposed.XposedHelpers.callMethod;
+import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
+
 public class Keepchat implements IXposedHookLoadPackage {
+    /** The getVideoUri() hook unfortunately doesn't provide a context for displaying a toast or
+     * calling the media scanner to show up the newly added media in the gallery. So after saving
+     * the video, we store the file path into the private videoPath variable which we can in turn
+     * access in the showVideo() hook (that gives us a context).
+     */
 	private String videoPath;
 
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
@@ -74,7 +77,6 @@ public class Keepchat implements IXposedHookLoadPackage {
 					e.printStackTrace();
 				}
 				//return the original image to the original caller so the app can continue
-				//TODO offer to return nag image so user has to go to sdcard to see snap and buy my app
 			}
 		});
 		/*
@@ -92,6 +94,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * for the user, but luckily this takes place before they actually view it.
 		 */
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getVideoUri", new XC_MethodHook() {
+            @Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 				String videoUri = (String) param.getResult();
 				XposedBridge.log("Video is at " + videoUri);
@@ -138,6 +141,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * are working.
 		 */
 		findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
+            @Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 				Context context = (Context) param.args[0];
 				//construct a toast notification telling the user it was successful
@@ -156,7 +160,6 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * "False" would mean that it would always report that it was not screenshotted.
 		 */
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "wasScreenshotted", new XC_MethodReplacement() {
-
 			@Override
 			protected Object replaceHookedMethod(MethodHookParam param)
 					throws Throwable {
@@ -168,8 +171,11 @@ public class Keepchat implements IXposedHookLoadPackage {
 	}
    /*
     * runMediaScan (Context context, String filename) private method
-    * context is simply the context
-    * filename is the file you want to be scanned
+    * Tells the media scanner to scan the newly added image or video so that it shows up in the
+    * gallery without a reboot.
+    *
+    * context is simply the context.
+    * filename is the file you want to be scanned.
     */
     private void runMediaScan(Context context, String filename) {
         try {
