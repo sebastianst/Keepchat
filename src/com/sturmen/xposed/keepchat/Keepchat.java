@@ -143,15 +143,21 @@ public class Keepchat implements IXposedHookLoadPackage {
 		findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
             @Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-				Context context = (Context) param.args[0];
-				//construct a toast notification telling the user it was successful
-				CharSequence text = "Saved video to " + videoPath;
-				Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
-				//display the toast for the user
-				toast.show();
-				XposedBridge.log("Video Toast displayed successfully.");
-				runMediaScan(context, videoPath);
-			}
+                Context context = (Context) param.args[0];
+                // If the videoPath is not null, show a toast with the path and call the media scanner.
+                // Otherwise, show an error toast message.
+                CharSequence toastText;
+                if (videoPath != null) {
+                    // so video saved successfully.
+                    toastText = "Saved video to " + videoPath;
+                    runMediaScan(context, videoPath);
+                } else {
+                    toastText = "Video could not be saved!";
+                }
+                //construct the toast notification
+                Toast toast = Toast.makeText(context, toastText, Toast.LENGTH_LONG);
+                toast.show();
+            }
 		});
 		/*
 		 * wasScreenshotted() hook
