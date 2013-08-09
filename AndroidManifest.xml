@@ -22,6 +22,15 @@
             android:name="xposeddescription"
             android:value="Save your Snaps from Snapchat." />
 
+        <activity
+                android:name=".SettingsActivity"
+                android:label="Keepchat Settings"
+                android:theme="@android:style/Theme.DeviceDefault.Light">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <ListPreference
+            android:key="pref_imageSaving"
+            android:title="@string/pref_imageSaving"
+            android:entries="@array/pref_saving_entries"
+            android:entryValues="@array/pref_saving_values"
+            android:defaultValue="@string/pref_imageSaving_default" />
+    <ListPreference
+            android:key="pref_videoSaving"
+            android:title="@string/pref_videoSaving"
+            android:entries="@array/pref_saving_entries"
+            android:entryValues="@array/pref_saving_values"
+            android:defaultValue="@string/pref_videoSaving_default" />
+
+</PreferenceScreen>
