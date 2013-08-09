@@ -48,34 +48,39 @@ public class Keepchat implements IXposedHookLoadPackage {
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getImageBitmap", Context.class, new XC_MethodHook() {
 			@Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-				Bitmap myImage = (Bitmap) param.getResult();
-				XposedBridge.log("Bitmap loaded.");
 				File file = constructFileObject(param.thisObject, "jpg");
-				try {
-					//open a new outputstream for writing
-					FileOutputStream out = new FileOutputStream(file);
-					//use built-in bitmap function to turn it into a jpeg and write it to the stream
-					myImage.compress(Bitmap.CompressFormat.JPEG, 90, out);
-					//flush the stream to make sure it's done
-					out.flush();
-					//close it
-					out.close();
-					//construct a log entry
-					CharSequence text = "Saved to " + file.getCanonicalPath() + "!";
-					XposedBridge.log(text.toString());
-					//get the original context to use for the toast
-					Context context = (Context) param.args[0];
-					//construct a toast notification telling the user it was successful
-					Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
-					//display the toast for the user
-					toast.show();
-					XposedBridge.log("Image Toast displayed successfully.");
-                    // Run a media scan, so it shows up in gallery
-                    runMediaScan(context, file.getCanonicalPath());
-				} catch (Exception e) {
-					XposedBridge.log("Error occured while saving the file.");
-					e.printStackTrace();
-				}
+                // Check if the image was already saved.
+                if (!file.exists()) {
+					try {
+                        Bitmap myImage = (Bitmap) param.getResult();
+						XposedBridge.log("Bitmap loaded.");
+						//open a new outputstream for writing
+						FileOutputStream out = new FileOutputStream(file);
+						//use built-in bitmap function to turn it into a jpeg and write it to the stream
+						myImage.compress(Bitmap.CompressFormat.JPEG, 90, out);
+						//flush the stream to make sure it's done
+						out.flush();
+						//close it
+						out.close();
+						//construct a log entry
+						CharSequence text = "Saved to " + file.getCanonicalPath() + "!";
+						XposedBridge.log(text.toString());
+						//get the original context to use for the toast
+						Context context = (Context) param.args[0];
+						//construct a toast notification telling the user it was successful
+						Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
+						//display the toast for the user
+						toast.show();
+						XposedBridge.log("Image Toast displayed successfully.");
+                        // Run a media scan, so it shows up in gallery
+                        runMediaScan(context, file.getCanonicalPath());
+					} catch (Exception e) {
+						XposedBridge.log("Error occured while saving the file.");
+						e.printStackTrace();
+					}
+                } else {
+                    XposedBridge.log("Image already saved, doing nothing.");
+                }
 				//return the original image to the original caller so the app can continue
 			}
 		});
@@ -85,7 +90,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * Videos are not their own object, so they can't be passed around.
 		 * The Android system basically provides a VideoView for viewing videos,
 		 * which you just provide it the location of the video and it does the rest.
-		 * 
+		 *
 		 * Unsurprisingly, Snapchat makes use of this View.
 		 * This method in the ReceivedSnap class gets the URI of the video
 		 * in preparation for one of these VideoViews.
@@ -217,9 +222,7 @@ public class Keepchat implements IXposedHookLoadPackage {
      *
      * The second parameter is simply the suffix, either "jpg" or "mp4".
      *
-     * Along the way, it creates the keepchat/ subfolder, if not existent and reports to the
-     * Xposed log if the file will be overwritten, which shall actually not happen anymore with the
-     * new naming scheme.
+     * Along the way, it creates the keepchat/ subfolder, if not existent.
      */
     private File constructFileObject(Object snapObject, String suffix) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         //we construct a path for us to write to
@@ -242,10 +245,6 @@ public class Keepchat implements IXposedHookLoadPackage {
         XposedBridge.log("Saving with filename " + fname);
         //construct a File object
         File file = new File (myDir, fname);
-        //make sure it doesn't exist (should never execute due to timestamp in name)
-        if (file.exists ())
-            if (file.delete())
-                XposedBridge.log("File " + fname + " will be overwritten.");
         return file;
     }
     /*
