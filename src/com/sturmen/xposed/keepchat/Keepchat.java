@@ -1,6 +1,10 @@
 package com.sturmen.xposed.keepchat;
 
+import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
@@ -36,7 +40,8 @@ public class Keepchat implements IXposedHookLoadPackage {
     private static final int SAVE_NEVER = 0;
     private static final int SAVE_AUTO = 1;
     private static final int SAVE_ASK = 2;
-
+    /** indicator for the type of snap (image/video) */
+    private boolean isImageSnap;
     /** This string helps passing the path to the image or video saved in the getImageBitmap() or
      * getVideoUri() hooks to the corresponding showImage() and showVideo() hooks. */
 	private String mediaPath;
@@ -87,6 +92,8 @@ public class Keepchat implements IXposedHookLoadPackage {
                             out.close();
                             mediaPath = file.getCanonicalPath();
                             XposedBridge.log("Saved image to " + mediaPath + "!");
+                            //set media type indicator
+                            isImageSnap = true;
                         } catch (Exception e) {
                             //reset mediaPath so that error Toast is shown and media scanner not run
                             mediaPath = null;
@@ -97,6 +104,7 @@ public class Keepchat implements IXposedHookLoadPackage {
                     } else {
                         XposedBridge.log("Image already saved, doing nothing.");
                     }
+                    //return the image to the original caller so the app can continue
                 }
             });
         }
@@ -145,6 +153,8 @@ public class Keepchat implements IXposedHookLoadPackage {
                         out.close();
                         mediaPath = file.getCanonicalPath();
                         XposedBridge.log("Saved video to " + mediaPath + " !");
+                        //set media type indicator
+                        isImageSnap = false;
                     } catch (Exception e) {
                         //reset mediaPath so that error Toast is shown and media scanner not run
                         mediaPath = null;
@@ -171,18 +181,36 @@ public class Keepchat implements IXposedHookLoadPackage {
         findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showImage", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Context context = (Context) callSuperMethod(param.thisObject, "getContext");
-                runMediaScanAndToast(context, mediaPath, "image");
+                //At this point the context is put in the private member so that the dialog can be
+                //initiated from the markViewed() hook
+                context = (Context) callSuperMethod(param.thisObject, "getContext");
+                if (imageSavingMode == SAVE_AUTO)
+                    runMediaScanAndToast(context, mediaPath, "image");
             }
         });
         if (videoSavingMode != SAVE_NEVER)
         findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
             @Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                runMediaScanAndToast((Context) param.args[0], mediaPath, "video");
+                //At this point the context is put in the private member so that the dialog can be
+                //initiated from the markViewed() hook
+                context = (Context) param.args[0];
+                if (videoSavingMode == SAVE_AUTO)
+                    runMediaScanAndToast(context, mediaPath, "video");
             }
 		});
 
+        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "markViewed", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                //If auto saving is enabled, the media was already saved and the media scanner called
+                //So only call the dialog is asking is enabled
+                if ((isImageSnap && imageSavingMode == SAVE_ASK) || (!isImageSnap && videoSavingMode == SAVE_ASK)) {
+                    showDialog(context);
+                    XposedBridge.log("Show dialog in markViewed hook.");
+                }
+            }
+        });
 		/*
 		 * wasScreenshotted() hook
 		 * This method is called to see if the Snap was screenshotted.
@@ -271,6 +299,50 @@ public class Keepchat implements IXposedHookLoadPackage {
         XposedBridge.log("Saving with filename " + fname);
         //construct a File object
         return new File (myDir, fname);
+    }
+
+    private void showDialog(final Context dContext) {
+        // 1. Instantiate an AlertDialog.Builder with its constructor
+        AlertDialog.Builder builder = new AlertDialog.Builder(dContext);
+
+        // 2. Chain together various setter methods to set the dialog characteristics
+        final String mediaTypeStr = isImageSnap ? "image" : "video";
+        builder.setMessage("The " + mediaTypeStr + " will be saved at\n" + mediaPath).setTitle("Save " + mediaTypeStr + "?");
+
+        builder.setPositiveButton("Save", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                XposedBridge.log("User choose to save. Keep saved file.");
+                runMediaScanAndToast(dContext, mediaPath, mediaTypeStr);
+            }
+        });
+        builder.setNeutralButton("Settings", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                XposedBridge.log("User choose to show settings. Keep saved file.");
+                runMediaScanAndToast(dContext, mediaPath, mediaTypeStr);
+                Intent settingsIntent = new Intent(Intent.ACTION_MAIN, null);
+                settingsIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                settingsIntent.setComponent(ComponentName.unflattenFromString("com.sturmen.xposed.keepchat/.SettingsActivity"));
+                dContext.startActivity(settingsIntent);
+            }
+        });
+        builder.setNegativeButton("Discard", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                XposedBridge.log("User choose not to save.");
+                dialog.cancel();
+            }
+        });
+        builder.setOnCancelListener(new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialog) {
+                if ((new File(mediaPath)).delete())
+                    XposedBridge.log("File " + mediaPath + " deleted successfully");
+                else
+                    XposedBridge.log("Could not delete file " + mediaPath);
+            }
+        });
+        // 3. Get the AlertDialog from create()
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
     /** {@code XposedHelpers.callMethod()} cannot call methods of the super class of an object, because it
      * uses {@code getDeclaredMethods()}. So we have to implement this little helper, which should work
