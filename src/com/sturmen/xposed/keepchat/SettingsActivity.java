@@ -47,6 +47,7 @@ public class SettingsActivity extends Activity {
             addPreferencesFromResource(R.xml.preferences);
             updateListSummary("pref_imageSaving");
             updateListSummary("pref_videoSaving");
+            updateListSummary("pref_toast");
         }
 
         @Override
@@ -62,7 +63,7 @@ public class SettingsActivity extends Activity {
         }
 
         public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            if (key.equals("pref_imageSaving") || key.equals("pref_videoSaving")) {
+            if (key.equals("pref_imageSaving") || key.equals("pref_videoSaving") || key.equals("pref_toast")) {
                 updateListSummary(key);
             }
         }

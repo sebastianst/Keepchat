@@ -3,9 +3,12 @@
 
     <string name="app_name">Keepchat</string>
     <string name="credits">Coded by <a href="mailto:sturmen@outlook.com">sturmen</a>.\nMakes use of the <a href="http://forum.xda-developers.com/showthread.php?t=1574401">Xposed Framework</a> by rovo89</string>
+
     <string name="pref_imageSaving">Images</string>
     <string name="pref_imageSaving_default">1</string>
     <string name="pref_videoSaving">Videos</string>
     <string name="pref_videoSaving_default">1</string>
+    <string name="pref_toast">Toast</string>
+    <string name="pref_toast_default">-1</string>
 
 </resources>

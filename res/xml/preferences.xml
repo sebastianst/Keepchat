@@ -13,5 +13,11 @@
             android:entries="@array/pref_saving_entries"
             android:entryValues="@array/pref_saving_values"
             android:defaultValue="@string/pref_videoSaving_default" />
+    <ListPreference
+            android:key="pref_toast"
+            android:title="@string/pref_toast"
+            android:entries="@array/pref_toast_entries"
+            android:entryValues="@array/pref_toast_values"
+            android:defaultValue="@string/pref_toast_default" />
 
 </PreferenceScreen>
