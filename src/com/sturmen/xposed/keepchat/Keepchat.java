@@ -40,6 +40,15 @@ public class Keepchat implements IXposedHookLoadPackage {
     /** This string helps passing the path to the image or video saved in the getImageBitmap() or
      * getVideoUri() hooks to the corresponding showImage() and showVideo() hooks. */
 	private String mediaPath;
+    /** Member to pass a context to hooks where a context is needed,
+     * but non available from within the hooked method */
+    private Context context;
+    //Load the preferences for Keepchat
+    XSharedPreferences savePrefs = new XSharedPreferences(PACKAGE_NAME);
+    final int imageSavingMode = Integer.parseInt(savePrefs.getString("pref_imageSaving", Integer.toString(SAVE_AUTO)));
+    final int videoSavingMode = Integer.parseInt(savePrefs.getString("pref_videoSaving", Integer.toString(SAVE_AUTO)));
+    final int toastMode = Integer.parseInt(savePrefs.getString("pref_toast", "-1"));
+
 
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		if (!lpparam.packageName.equals("com.snapchat.android"))
@@ -47,10 +56,9 @@ public class Keepchat implements IXposedHookLoadPackage {
 		else
 			XposedBridge.log("Keepchat: Snapchat load detected.");
 
-        XSharedPreferences savePrefs = new XSharedPreferences(PACKAGE_NAME);
-        final int imageSavingMode = Integer.parseInt(savePrefs.getString("pref_imageSaving", Integer.toString(SAVE_AUTO)));
-        final int videoSavingMode = Integer.parseInt(savePrefs.getString("pref_videoSaving", Integer.toString(SAVE_AUTO)));
-        XposedBridge.log("Loaded saving preferences: Images -> " + imageSavingMode + ", Videos -> " + videoSavingMode);
+        XposedBridge.log("Loaded saving preferences: Images -> " + imageSavingMode +
+                ", Videos -> " + videoSavingMode +
+                ", Toast -> " + toastMode);
 
         if (imageSavingMode != SAVE_NEVER) {
 		/*
@@ -226,7 +234,8 @@ public class Keepchat implements IXposedHookLoadPackage {
             toastText = type + " could not be saved! file null.";
         }
         //construct the toast notification
-        Toast.makeText(context, toastText, Toast.LENGTH_LONG).show();
+        if (toastMode >= 0)
+            Toast.makeText(context, toastText, toastMode).show();
     }
 
     /**
