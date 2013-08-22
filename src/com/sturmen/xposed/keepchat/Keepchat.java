@@ -97,6 +97,8 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * We hook in, intercept the result (a String), then copy the bytes from
 		 * that location to our SD directory. This results in a bit of a slowdown
 		 * for the user, but luckily this takes place before they actually view it.
+		 *
+		 * The file path is stored in the mediaPath member for later use in the showVideo() hook.
 		 */
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getVideoUri", new XC_MethodHook() {
             @Override
@@ -167,8 +169,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		/*
 		 * wasScreenshotted() hook
 		 * This method is called to see if the Snap was screenshotted.
-		 * We hook it to always return true, meaning that it was screenshotted.
-		 * "False" would mean that it would always report that it was not screenshotted.
+		 * We hook it to always return false, meaning that it was not screenshotted.
 		 */
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "wasScreenshotted", new XC_MethodReplacement() {
 			@Override
@@ -180,10 +181,9 @@ public class Keepchat implements IXposedHookLoadPackage {
 			}
 		});
 	}
-   /*
-    * runMediaScan (Context context, String filename) private method
+   /**
     * Tells the media scanner to scan the newly added image or video so that it shows up in the
-    * gallery without a reboot.
+    * gallery without a reboot. And shows a Toast message where the media was saved.
     *
     * context is simply the context.
     * filename is the file you want to be scanned.
@@ -209,20 +209,17 @@ public class Keepchat implements IXposedHookLoadPackage {
         }
     }
 
-    /*
-     * constructFileObject(Object snapObject, String suffix) private method
+    /**
      * Return a File object to safe the image/video.
      * The filename will be in the format <sender>_yyyy-MM-dd_HH-mm-ss.<suffix>
-     * and it resides in the keepchat/ subfolder on the SD card.
-     * As the construction of the file(name) got more fancy, it is handled in this separate method.
+     * and it resides in the <i>keepchat/</i> subfolder on the SD card. Along the way,
+     * the <i>keepchat/</i> subfolder is created if not existent.
      *
-     * The first parameter is the 'this' reference, which should be an instance of ReceivedSnap.
-     * It is necessary because we want to extract the sender's name from it. It should be passed
-     * to the method via 'param.thisObject' inside a hooked method.
+     * @param snapObject The ReceivedSnap Object, which contains the necessary information, i.e.,
+     *                   the senser's name and the snap's timestamp. It should be passed to the
+     *                   method via 'param.thisObject' inside a hooked method.
      *
-     * The second parameter is simply the suffix, either "jpg" or "mp4".
-     *
-     * Along the way, it creates the keepchat/ subfolder, if not existent.
+     * @param suffix The file suffix, either "jpg" or "mp4"
      */
     private File constructFileObject(Object snapObject, String suffix) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         //we construct a path for us to write to
@@ -244,16 +241,21 @@ public class Keepchat implements IXposedHookLoadPackage {
         String fname = sender + "_" + (fnameDateFormat.format(timestamp)) + "." + suffix;
         XposedBridge.log("Saving with filename " + fname);
         //construct a File object
-        File file = new File (myDir, fname);
-        return file;
+        return new File (myDir, fname);
     }
-    /*
-     * callSuperMethod()
+    /** {@code XposedHelpers.callMethod()} cannot call methods of the super class of an object, because it
+     * uses {@code getDeclaredMethods()}. So we have to implement this little helper, which should work
+     * similar to {@code }callMethod()}. Furthermore, the exceptions from getMethod() are passed on.
+     * <p>
+     * At the moment, only argument-free methods supported (only case needed here). After a discussion
+     * with the Xposed author it looks as if the functionality to call super methods will be implemented
+     * in {@code XposedHelpers.callMethod()} in a future release.
      *
-     * XposedHelpers.callMethod() cannot call methods of the super class of an object, because it
-     * uses getDeclaredMethods(). So we have to implement this little helper, which should work
-     * similar to callMethod(). Furthermore, the exceptions from getMethod() are passed on.
-     * See http://forum.xda-developers.com/showpost.php?p=42598280&postcount=1753
+     * @param obj Object whose method should be called
+     * @param methodName String representing the name of the argument-free method to be called
+     * @return The object that the method call returns
+     * @see <a href="http://forum.xda-developers.com/showpost.php?p=42598280&postcount=1753">
+     *     Discussion about calls to super methods in Xposed's XDA thread</a>
      */
     private Object callSuperMethod(Object obj, String methodName) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         return obj.getClass().getMethod(methodName).invoke(obj);
