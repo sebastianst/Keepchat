@@ -25,12 +25,9 @@ import static de.robv.android.xposed.XposedHelpers.callMethod;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 
 public class Keepchat implements IXposedHookLoadPackage {
-    /** The getVideoUri() hook unfortunately doesn't provide a context for displaying a toast or
-     * calling the media scanner to show up the newly added media in the gallery. So after saving
-     * the video, we store the file path into the private videoPath variable which we can in turn
-     * access in the showVideo() hook (that gives us a context).
-     */
-	private String videoPath;
+    /** This string helps passing the path to the image or video saved in the getImageBitmap() or
+     * getVideoUri() hooks to the corresponding showImage() and showVideo() hooks. */
+	private String mediaPath;
 
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		if (!lpparam.packageName.equals("com.snapchat.android"))
@@ -39,13 +36,13 @@ public class Keepchat implements IXposedHookLoadPackage {
 			XposedBridge.log("Keepchat: Snapchat load detected.");
 
 		/*
-		 * getImageBitmap(Context) hook
+		 * getImageBitmap() hook
 		 * The ReceivedSnap class has a method to load a Bitmap in preparation for viewing.
 		 * This method returns said bitmap back so the application can display it.
 		 * We hook this method to intercept the result and write it to the SD card.
-		 * We then use the handily-provided Context to display a toast notification of success.
+		 * The file path is stored in the mediaPath member for later use in the showImage() hook.
 		 */
-		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getImageBitmap", Context.class, new XC_MethodHook() {
+		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getImageBitmap", new XC_MethodHook() {
 			@Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 				File file = constructFileObject(param.thisObject, "jpg");
@@ -62,20 +59,13 @@ public class Keepchat implements IXposedHookLoadPackage {
 						out.flush();
 						//close it
 						out.close();
-						//construct a log entry
-						CharSequence text = "Saved to " + file.getCanonicalPath() + "!";
-						XposedBridge.log(text.toString());
-						//get the original context to use for the toast
-						Context context = (Context) param.args[0];
-						//construct a toast notification telling the user it was successful
-						Toast toast = Toast.makeText(context, text, Toast.LENGTH_LONG);
-						//display the toast for the user
-						toast.show();
-						XposedBridge.log("Image Toast displayed successfully.");
-                        // Run a media scan, so it shows up in gallery
-                        runMediaScan(context, file.getCanonicalPath());
+                        mediaPath = file.getCanonicalPath();
+						XposedBridge.log("Saved image to " + mediaPath + "!");
 					} catch (Exception e) {
-						XposedBridge.log("Error occured while saving the file.");
+                        //reset mediaPath so that error Toast is shown and media scanner not run
+                        mediaPath = null;
+                        //if any exceptions are found, write to log
+						XposedBridge.log("Error occurred while saving the image.");
 						e.printStackTrace();
 					}
                 } else {
@@ -102,70 +92,66 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 */
 		findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getVideoUri", new XC_MethodHook() {
             @Override
-			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-				String videoUri = (String) param.getResult();
-				XposedBridge.log("Video is at " + videoUri);
-				File file = constructFileObject(param.thisObject, "mp4");
-				videoPath = file.getCanonicalPath();
-				try {
-					//make a new input stream from the video URI
-					FileInputStream in = new FileInputStream (new File(videoUri));
-					//make a new output stream to write to
-					FileOutputStream out = new FileOutputStream(file);
-					//make a buffer we use for copying
-					byte[] buf = new byte[1024];
-					int len;
-					//copy the file over using a while loop
-					while ((len = in.read(buf)) > 0) {
-						out.write(buf, 0, len);
-					}
-					//close the input stream
-					in.close();
-					//flush the output stream so we know it's finished
-					out.flush();
-					//and then close it
-					out.close();
-					//construct a log message
-					CharSequence text = "Saved to " + file.getCanonicalPath() + " !";
-					XposedBridge.log(text.toString());
-				} catch (Exception e) {
-					//if any exceptions are found, write to log
-					XposedBridge.log("Error occured while saving the file.");
-					e.printStackTrace();
-				}
-			}
-		});
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                String videoUri = (String) param.getResult();
+                XposedBridge.log("Video is at " + videoUri);
+                File file = constructFileObject(param.thisObject, "mp4");
+                mediaPath = file.getCanonicalPath();
+                try {
+                    //make a new input stream from the video URI
+                    FileInputStream in = new FileInputStream(new File(videoUri));
+                    //make a new output stream to write to
+                    FileOutputStream out = new FileOutputStream(file);
+                    //make a buffer we use for copying
+                    byte[] buf = new byte[1024];
+                    int len;
+                    //copy the file over using a while loop
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
+                    }
+                    //close the input stream
+                    in.close();
+                    //flush the output stream so we know it's finished
+                    out.flush();
+                    //and then close it
+                    out.close();
+                    mediaPath = file.getCanonicalPath();
+                    XposedBridge.log("Saved video to " + mediaPath + " !");
+                } catch (Exception e) {
+                    //reset mediaPath so that error Toast is shown and media scanner not run
+                    mediaPath = null;
+                    //if any exceptions are found, write to log
+                    XposedBridge.log("Error occurred while saving the video.");
+                    e.printStackTrace();
+                }
+            }
+        });
+
 		/*
-		 * showVideo() hook
-		 * Because getVideoUri() does not handily provide a context,
-		 * nor does its parent class (ReceivedSnap), we are unable to
-		 * get the context necessary in order to display a notification.
-		 * We "solve" this by cheating.
-		 * This is an entirely separate hook that displays a Toast notification
-		 * upon showing a video.
-		 * It makes no checks whatsoever that the video saving was successful,
-		 * it is merely for the benefit of the user to know that our hooks
-		 * are working.
+		 * showVideo() and showImage() hooks
+		 * Because getVideoUri() and getImageBitmap() do not handily provide a context,
+		 * nor do their parent classes (ReceivedSnap), we are unable to
+		 * get the context necessary in order to display a notification and call the media scanner.
+		 *
+		 * But these getters are called from the corresponding showVideo() and showImage() methods
+		 * of com.snapchat.android.ui.SnapView, which deliver the needed context. So the work that
+		 * needs a context is done here, while the file saving work is done in the getters.
+		 * The getters also save the file paths in the mediaPath member, which we use here.
 		 */
-		findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
+        findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showImage", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                Context context = (Context) callSuperMethod(param.thisObject, "getContext");
+                runMediaScanAndToast(context, mediaPath, "image");
+            }
+        });
+        findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
             @Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Context context = (Context) param.args[0];
-                // If the videoPath is not null, show a toast with the path and call the media scanner.
-                // Otherwise, show an error toast message.
-                CharSequence toastText;
-                if (videoPath != null) {
-                    // so video saved successfully.
-                    toastText = "Saved video to " + videoPath;
-                    runMediaScan(context, videoPath);
-                } else {
-                    toastText = "Video could not be saved!";
-                }
-                //construct the toast notification
-                Toast toast = Toast.makeText(context, toastText, Toast.LENGTH_LONG);
-                toast.show();
+                runMediaScanAndToast((Context) param.args[0], mediaPath, "video");
             }
 		});
+
 		/*
 		 * wasScreenshotted() hook
 		 * This method is called to see if the Snap was screenshotted.
@@ -185,28 +171,39 @@ public class Keepchat implements IXposedHookLoadPackage {
     * Tells the media scanner to scan the newly added image or video so that it shows up in the
     * gallery without a reboot. And shows a Toast message where the media was saved.
     *
-    * context is simply the context.
-    * filename is the file you want to be scanned.
+    * @param context Current context
+    * @param filePath File to be scanned by the media scanner
     */
-    private void runMediaScan(Context context, String filename) {
-        try {
-        	XposedBridge.log("MediaScanner running: " + filename);
-            // Run MediaScanner on file, so it shows up in Gallery instantly
-            MediaScannerConnection.scanFile(context,
-                    new String[]{filename}, null,
-                    new MediaScannerConnection.OnScanCompletedListener() {
-                        public void onScanCompleted(String path, Uri uri) {
-                            if (uri != null) {
-                                XposedBridge.log("MediaScanner ran successfully: " + uri.toString());
-                            } else {
-                                XposedBridge.log("Unknown error occurred while trying to run MediaScanner");
+    private void runMediaScanAndToast(Context context, String filePath, String type) {
+        String toastText;
+        // If the filePath is not null, show a toast with the path and call the media scanner.
+        // Otherwise, show an error toast message.
+        if (filePath != null) {
+            // so video saved successfully.
+            toastText = "Saved " + type + " to " + filePath;
+            try {
+                XposedBridge.log("MediaScanner running: " + filePath);
+                // Run MediaScanner on file, so it shows up in Gallery instantly
+                MediaScannerConnection.scanFile(context,
+                        new String[]{filePath}, null,
+                        new MediaScannerConnection.OnScanCompletedListener() {
+                            public void onScanCompleted(String path, Uri uri) {
+                                if (uri != null) {
+                                    XposedBridge.log("MediaScanner ran successfully: " + uri.toString());
+                                } else {
+                                    XposedBridge.log("Unknown error occurred while trying to run MediaScanner");
+                                }
                             }
-                        }
-                    });
-        } catch (Exception e) {
-            XposedBridge.log("Error occurred while trying to run MediaScanner");
-            e.printStackTrace();
+                        });
+            } catch (Exception e) {
+                XposedBridge.log("Error occurred while trying to run MediaScanner");
+                e.printStackTrace();
+            }
+        } else {
+            toastText = type + " could not be saved! file null.";
         }
+        //construct the toast notification
+        Toast.makeText(context, toastText, Toast.LENGTH_LONG).show();
     }
 
     /**
