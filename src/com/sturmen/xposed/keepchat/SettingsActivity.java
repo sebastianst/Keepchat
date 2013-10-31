@@ -100,14 +100,14 @@ public class SettingsActivity extends Activity {
             List<String> entries = new ArrayList<String>();
             List<String> entryValues = new ArrayList<String>();
 
-            entries.add("Default (" + Environment.getExternalStorageDirectory().toString() + ")");
+            entries.add("Default (" + Environment.getExternalStorageDirectory().toString() + "/keepchat)");
             entryValues.add("");
 
             String rootDir = Environment.getExternalStorageDirectory().toString();
             String[] files = getStorageDirectories();
             for (String file : files) {
                 if (!file.equals(rootDir)) {
-                    entries.add(file);
+                    entries.add(file + "/keepchat");
                     entryValues.add(file);
                 }
             }

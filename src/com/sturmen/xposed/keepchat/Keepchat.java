@@ -30,28 +30,19 @@ import static de.robv.android.xposed.XposedHelpers.callMethod;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 
 public class Keepchat implements IXposedHookLoadPackage {
-    /**
-     * The getVideoUri() hook unfortunately doesn't provide a context for
-     * displaying a toast or calling the media scanner to show up the newly
-     * added media in the gallery. So after saving the video, we store the file
-     * path into the private videoPath variable which we can in turn access in
-     * the showVideo() hook (that gives us a context).
-     */
     private static final String PACKAGE_NAME = Keepchat.class.getPackage().getName();
 
-    // We cannot access the xml resources for the keepchat package, so we define
-    // the preference codes here...
+    // We cannot access the xml resources for the keepchat package, so we define the preference codes here...
     private static final int SAVE_NEVER = 0;
     private static final int SAVE_AUTO = 1;
     private static final int SAVE_ASK = 2;
 
-    /** indicator for the type of snap (image/video) */
+    // Indicator for the type of snap (image/video)
     private boolean isImageSnap;
 
     /**
-     * This string helps passing the path to the image or video saved in the
-     * getImageBitmap() or getVideoUri() hooks to the corresponding showImage()
-     * and showVideo() hooks.
+     * This string helps passing the path to the image or video saved in the getImageBitmap() or
+     * getVideoUri() hooks to the corresponding showImage() and showVideo() hooks.
      */
     private String mediaPath;
 
@@ -81,10 +72,11 @@ public class Keepchat implements IXposedHookLoadPackage {
             XposedBridge.log("Keepchat: Snapchat load detected.");
 
         XposedBridge.log(
-                "Loaded saving preferences: "
-                        + "Images -> " + imageSavingMode + ", "
-                        + "Videos -> " + videoSavingMode + ", "
-                        + "Toast -> " + toastMode
+            "Loaded saving preferences: "
+            + "Location" + saveLocation + ", "
+            + "Images -> " + imageSavingMode + ", "
+            + "Videos -> " + videoSavingMode + ", "
+            + "Toast -> " + toastMode
         );
 
         if (imageSavingMode != SAVE_NEVER) {
@@ -103,26 +95,22 @@ public class Keepchat implements IXposedHookLoadPackage {
                         try {
                             Bitmap myImage = (Bitmap) param.getResult();
                             XposedBridge.log("Bitmap loaded.");
-                            // open a new outputstream for writing
-                            FileOutputStream out = new FileOutputStream(file);
-                            // use built-in bitmap function to turn it
-                            // into a jpeg and write it to the stream
-                            myImage.compress(Bitmap.CompressFormat.JPEG, 90, out);
-                            out.flush();
-                            out.close();
+
+                            // open a new OutputStream for writing, compress as JPEG and save
+                            FileOutputStream fileStream = new FileOutputStream(file);
+                            myImage.compress(Bitmap.CompressFormat.JPEG, 90, fileStream);
+                            fileStream.close();
 
                             mediaPath = file.getCanonicalPath();
                             XposedBridge.log("Saved image to " + mediaPath + "!");
-                            // set media type indicator
                             isImageSnap = true;
-                        } catch (Exception e) {
-                            // reset mediaPath so that error Toast is
-                            // shown and media scanner not run
+                        }
+                        catch (Exception e) {
+                            // reset mediaPath so that error Toast is shown and media scanner not run
                             mediaPath = null;
-                            // if any exceptions are found, write to log
-                            XposedBridge
-                                    .log("Error occurred while saving the image.");
-                            e.printStackTrace();
+
+                            XposedBridge.log("Error occurred while saving the image.");
+                            XposedBridge.log(e);
                         }
                     } else {
                         isSaved = true;
@@ -132,83 +120,54 @@ public class Keepchat implements IXposedHookLoadPackage {
                 }
             }
 
-			/*
-			 * getImageBitmap() hook The ReceivedSnap class has a method to load
-			 * a Bitmap in preparation for viewing. This method returns said
-			 * bitmap back so the application can display it. We hook this
-			 * method to intercept the result and write it to the SD card. The
-			 * file path is stored in the mediaPath member for later use in the
-			 * showImage() hook.
-			 */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap",
-                    lpparam.classLoader, "getImageBitmap", Context.class,
-                    new imageSaver());
-
-			/*
-			 * getImageBitmap() hook The Story class has a method to load a
-			 * Bitmap in preparation for viewing a Image in Story. This method
-			 * returns said bitmap back so the application can display it. We
-			 * hook this method to intercept the result and write it to the SD
-			 * card. The file path is stored in the mediaPath member for later
-			 * use in the showImage() hook.
-			 */
-            findAndHookMethod("com.snapchat.android.model.Story",
-                    lpparam.classLoader, "getImageBitmap", Context.class,
-                    new imageSaver());
-
+			/** getImageBitmap() hook
+             * The ReceivedSnap and Story classes have a method to load a Bitmap in preparation for viewing.
+             * This method returns said bitmap back so the application can display it.
+             * We hook this method to intercept the result and write it to the SD card.
+             * The file path is stored in the mediaPath member for later use in the showImage() hook.
+             */
+            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getImageBitmap", Context.class, new imageSaver());
+            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "getImageBitmap", Context.class, new imageSaver());
         }
 
         if (videoSavingMode != SAVE_NEVER) {
 
-			/*
-			 * Created a common class for both the video hooks as they are the
-			 * same for saving both the received snaps and stories.
-			 */
+			// Class to handle video saving, this is the MethodHook we use for videos
             final class videoSaver extends XC_MethodHook {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param)
-                        throws Throwable {
-                    String videoUri = (String) param.getResult();
-                    XposedBridge.log("Video is at " + videoUri);
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     File file = constructFileObject(param.thisObject, "mp4");
+                    isImageSnap = false;
+
                     if (!file.exists()) {
                         isSaved = false;
+
                         mediaPath = file.getCanonicalPath();
                         try {
-                            // make a new input stream from the video
-                            // URI
-                            FileInputStream in = new FileInputStream(new File(
-                                    videoUri));
-                            // make a new output stream to write to
+                            String videoUri = (String) param.getResult();
+                            XposedBridge.log("Video found at " + videoUri);
+
+                            //Open source and destination Files to copy video.
+                            FileInputStream in = new FileInputStream(new File(videoUri));
                             FileOutputStream out = new FileOutputStream(file);
-                            // make a buffer we use for copying
+
+                            // Create a buffer and copy video from source
                             byte[] buf = new byte[1024];
                             int len;
-                            // copy the file over using a while loop
-                            while ((len = in.read(buf)) > 0) {
-                                out.write(buf, 0, len);
-                            }
-                            // close the input stream
+                            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+
+                            // Cleanup both streams.
                             in.close();
-                            // flush the output stream so we know it's
-                            // finished
-                            out.flush();
-                            // and then close it
                             out.close();
-                            mediaPath = file.getCanonicalPath();
-                            XposedBridge.log("Saved video to " + mediaPath
-                                    + " ! ");
-                            // set media type indicator
-                            isImageSnap = false;
-                        } catch (Exception e) {
-                            // reset mediaPath so that error Toast is
-                            // shown
-                            // and media scanner not run
+
+                            XposedBridge.log("Saved video to " + mediaPath + " ! ");
+                        }
+                        catch (Exception e) {
+                            // Reset mediaPath -> Error Toast is shown and Media Scanner not run
                             mediaPath = null;
-                            // if any exceptions are found, write to log
-                            XposedBridge
-                                    .log("Error occurred while saving the video.");
-                            e.printStackTrace();
+
+                            XposedBridge.log("Error occurred while saving the video.");
+                            XposedBridge.log(e);
                         }
                     } else {
                         isSaved = true;
@@ -217,47 +176,36 @@ public class Keepchat implements IXposedHookLoadPackage {
                 }
             }
 
-			/*
-			 * getVideoUri() hook The ReceivedSnap class treats videos a little
-			 * differently. Videos are not their own object, so they can't be
-			 * passed around. The Android system basically provides a VideoView
-			 * for viewing videos, which you just provide it the location of the
-			 * video and it does the rest.
-			 * 
-			 * Unsurprisingly, Snapchat makes use of this View. This method in
-			 * the ReceivedSnap class gets the URI of the video in preparation
-			 * for one of these VideoViews. We hook in, intercept the result (a
-			 * String), then copy the bytes from that location to our SD
-			 * directory. This results in a bit of a slowdown for the user, but
-			 * luckily this takes place before they actually view it.
-			 * 
-			 * The file path is stored in the mediaPath member for later use in
-			 * the showVideo() hook.
-			 */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap",
-                    lpparam.classLoader, "getVideoUri", new videoSaver());
-
-			/*
-			 * getVideoUri() hook The Story class because the stories use the
-			 * Story class and not the RecievedSnap class to prepare the video.
-			 */
-            findAndHookMethod("com.snapchat.android.model.Story",
-                    lpparam.classLoader, "getVideoUri", new videoSaver());
+            /** getVideoUri() hook
+             * The ReceivedSnap class treats videos a little differently.
+             * Videos are not their own object, so they can't be passed around.
+             * The Android system basically provides a VideoView for viewing videos,
+             * which you just provide it the location of the video and it does the rest.
+             *
+             * Unsurprisingly, Snapchat makes use of this View.
+             * This method in the ReceivedSnap class gets the URI of the video
+             * in preparation for one of these VideoViews.
+             * We hook in, intercept the result (a String), then copy the bytes from
+             * that location to our SD directory. This results in a bit of a slowdown
+             * for the user, but luckily this takes place before they actually view it.
+             *
+             * The file path is stored in the mediaPath member for later use in the showVideo() hook.
+             */
+            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getVideoUri", new videoSaver());
+            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "getVideoUri", new videoSaver());
 
         }
 
 		/*
-		 * showVideo() and showImage() hooks Because getVideoUri() and
-		 * getImageBitmap() do not handily provide a context, nor do their
-		 * parent classes (ReceivedSnap), we are unable to get the context
-		 * necessary in order to display a notification and call the media
-		 * scanner.
+		 * showVideo() and showImage() hooks
+		 * Because getVideoUri() and getImageBitmap() do not handily provide a context, nor do their
+		 * parent classes (ReceivedSnap), we are unable to get the context necessary in order to
+		 * display a notification and call the media scanner.
 		 * 
-		 * But these getters are called from the corresponding showVideo() and
-		 * showImage() methods of com.snapchat.android.ui.SnapView, which
-		 * deliver the needed context. So the work that needs a context is done
-		 * here, while the file saving work is done in the getters. The getters
-		 * also save the file paths in the mediaPath member, which we use here.
+		 * But these getters are called from the corresponding showVideo() and showImage() methods
+		 * of com.snapchat.android.ui.SnapView, which deliver the needed context. So the work that
+		 * needs a context is done here, while the file saving work is done in the getters.
+		 * The getters also save the file paths in the mediaPath var, which we use here.
 		 */
         if (imageSavingMode != SAVE_NEVER)
             findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showImage", new XC_MethodHook() {
@@ -311,8 +259,7 @@ public class Keepchat implements IXposedHookLoadPackage {
         findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "markViewed", new askSave());
         findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "markViewed", new askSave());
 
-		/*
-		 * hooking the debug method so that snapchat writes to logcat to help
+		/** hooking the debug method so that snapchat writes to logcat to help
 		 * figure out what snapchat is doing
 		 */
 		/*findAndHookMethod("com.snapchat.android.Timber", lpparam.classLoader,
@@ -326,10 +273,9 @@ public class Keepchat implements IXposedHookLoadPackage {
 					}
 				});*/
 
-		/*
-		 * wasScreenshotted() hook This method is called to see if the Snap was
-		 * screenshotted. We hook it to always return false, meaning that it was
-		 * not screenshotted.
+		/**
+         * wasScreenshotted() hook
+         * This method is called to see if the Snap was screenshotted. Return false.
 		 */
         findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "wasScreenshotted", new XC_MethodReplacement() {
             @Override
@@ -352,8 +298,7 @@ public class Keepchat implements IXposedHookLoadPackage {
     private void runMediaScanAndToast(Context context, String filePath,
                                       String type) {
         String toastText;
-        // If the filePath is not null, show a toast with the path and call the
-        // media scanner.
+        // If the filePath is not null, show a toast with the path and call the media scanner.
         // Otherwise, show an error toast message.
         if (filePath != null) {
             // so video saved successfully.
@@ -362,34 +307,32 @@ public class Keepchat implements IXposedHookLoadPackage {
                 XposedBridge.log("MediaScanner running: " + filePath);
                 // Run MediaScanner on file, so it shows up in Gallery instantly
                 MediaScannerConnection.scanFile(context,
-                        new String[] { filePath }, null,
-                        new MediaScannerConnection.OnScanCompletedListener() {
-                            public void onScanCompleted(String path, Uri uri) {
-                                if (uri != null) {
-                                    XposedBridge
-                                            .log("MediaScanner ran successfully: "
-                                                    + uri.toString());
-                                } else {
-                                    XposedBridge
-                                            .log("Unknown error occurred while trying to run MediaScanner");
-                                }
+                    new String[] { filePath }, null,
+                    new MediaScannerConnection.OnScanCompletedListener() {
+                        public void onScanCompleted(String path, Uri uri) {
+                            if (uri != null) {
+                                XposedBridge.log("MediaScanner ran successfully: " + uri.toString());
+                            } else {
+                                XposedBridge.log("Unknown error occurred while trying to run MediaScanner");
                             }
-                        });
-            } catch (Exception e) {
-                XposedBridge
-                        .log("Error occurred while trying to run MediaScanner");
-                e.printStackTrace();
+                        }
+                    });
             }
-        } else {
+            catch (Exception e) {
+                XposedBridge.log("Error occurred while trying to run MediaScanner");
+                XposedBridge.log(e);
+            }
+        }
+        else {
             toastText = type + " could not be saved! file null.";
         }
         // construct the toast notification
         if ((toastMode >= 0) && (isSaved == false)) {
             Toast.makeText(context, toastText, toastMode).show();
-        } else if ((toastMode >= 0) && (isSaved == true)) {
+        }
+        else if ((toastMode >= 0) && (isSaved == true)) {
             // display is saved when image/video already exists.
-            Toast.makeText(context, type + " is already saved.", toastMode)
-                    .show();
+            Toast.makeText(context, type + " is already saved.", toastMode).show();
         }
     }
 
@@ -409,33 +352,30 @@ public class Keepchat implements IXposedHookLoadPackage {
      *            The file suffix, either "jpg" or "mp4"
      */
     private File constructFileObject(Object snapObject, String suffix) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        // we construct a path for us to write to
+        // We construct a path for us to write to based on preferences.
         String root = Environment.getExternalStorageDirectory().toString();
-
         if (saveLocation != "" ) root = saveLocation;
 
-        // and add our own directory
+        // Add our own directory, and create it if it doesn't exist.
         File myDir = new File(root + "/keepchat");
         XposedBridge.log("Saving to directory " + myDir.toString());
-        // we make the directory if it doesn't exist.
-        if (myDir.mkdirs())
-            XposedBridge.log("Directory " + myDir.toString() + " was created.");
-        // construct the filename. It shall start with the sender's name...
+        if (myDir.mkdirs()) XposedBridge.log("Directory " + myDir.toString() + " was created.");
+
+        // Construct the filename. It shall start with the sender's name...
         String sender = (String) callMethod(snapObject, "getSender");
+
         // ...continue with the current date and time, lexicographically...
         SimpleDateFormat fnameDateFormat = new SimpleDateFormat(
                 "yyyy-MM-dd_HH-mm-ss", Locale.US);
-        // ReceivedSnap extends the Snap class. getTimestamp() is a member of
-        // the Snap class,
-        // so we cannot access it via XposedHelpers.callMethod() and have to use
-        // our own reflection for that
-        Date timestamp = new Date((Long) callSuperMethod(snapObject,
-                "getTimestamp"));
+
+        // ReceivedSnap extends the Snap class. getTimestamp() is a member of the Snap class,
+        // so we cannot access it via XposedHelpers.callMethod() and have to use our own reflection
+        Date timestamp = new Date((Long) callSuperMethod(snapObject,"getTimestamp"));
+
         // ...and end in the suffix provided ("jpg" or "mp4")
-        String fname = sender + "_" + (fnameDateFormat.format(timestamp)) + "."
-                + suffix;
+        String fname = sender + "_" + (fnameDateFormat.format(timestamp)) + "." + suffix;
+
         XposedBridge.log("Saving with filename " + fname);
-        // construct a File object
         return new File(myDir, fname);
     }
 
