@@ -145,7 +145,6 @@ public class SettingsActivity extends Activity {
                 dirs = new String[list.size()];
                 for (int i = 0; i < list.size(); i++) {
                     dirs[i] = (list.get(i).toString());
-                    Log.d("JONAS", dirs[i]);
                 }
             }
             catch (FileNotFoundException e) {}
