@@ -2,6 +2,12 @@
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <ListPreference
+        android:key="pref_saveLocation"
+        android:title="@string/pref_saveLocation"
+        android:entries="@array/pref_saveLocation_entries"
+        android:entryValues="@array/pref_saveLocation_values"
+        android:defaultValue="@string/pref_saveLocation_default" />
+    <ListPreference
             android:key="pref_imageSaving"
             android:title="@string/pref_imageSaving"
             android:entries="@array/pref_saving_entries"
@@ -19,5 +25,6 @@
             android:entries="@array/pref_toast_entries"
             android:entryValues="@array/pref_toast_values"
             android:defaultValue="@string/pref_toast_default" />
+
 
 </PreferenceScreen>

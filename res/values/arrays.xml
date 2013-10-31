@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="pref_saveLocation_entries">
+        <item>Default</item>
+    </string-array>
+    <string-array name="pref_saveLocation_values">
+        <item></item>
+    </string-array>
     <string-array name="pref_saving_entries">
         <item>Never save</item>
         <item>Save automatically</item>
@@ -10,7 +16,6 @@
         <item>1</item>
         <item>2</item>
     </string-array>
-
     <string-array name="pref_toast_entries">
         <item>Don\'t show</item>
         <item>Short</item>
