@@ -85,9 +85,17 @@ public class Keepchat implements IXposedHookLoadPackage {
              * Image Saving class, this is used for images in both Snaps and Stories
              */
             final class imageSaver extends XC_MethodHook {
+                Boolean isStory = false;
+
+                public imageSaver(Boolean isStory) {
+                    this.isStory = isStory;
+                }
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    File file = constructFileObject(param.thisObject, "jpg");
+
+                    XposedBridge.log("We're in imageSaver()...");
+
+                    File file = constructFileObject(param.thisObject, "jpg", isStory);
 
                     // Check if the image was already saved.
                     if (!file.exists()) {
@@ -126,17 +134,23 @@ public class Keepchat implements IXposedHookLoadPackage {
              * We hook this method to intercept the result and write it to the SD card.
              * The file path is stored in the mediaPath member for later use in the showImage() hook.
              */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getImageBitmap", Context.class, new imageSaver());
-            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "getImageBitmap", Context.class, new imageSaver());
+            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "a", Context.class, new imageSaver(false));
+            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "a", Context.class, new imageSaver(true));
         }
 
         if (videoSavingMode != SAVE_NEVER) {
 
 			// Class to handle video saving, this is the MethodHook we use for videos
             final class videoSaver extends XC_MethodHook {
+                Boolean isStory = false;
+
+                public videoSaver(Boolean isStory) {
+                    this.isStory = isStory;
+                }
+
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    File file = constructFileObject(param.thisObject, "mp4");
+                    File file = constructFileObject(param.thisObject, "mp4", isStory);
                     isImageSnap = false;
 
                     if (!file.exists()) {
@@ -191,8 +205,8 @@ public class Keepchat implements IXposedHookLoadPackage {
              *
              * The file path is stored in the mediaPath member for later use in the showVideo() hook.
              */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "getVideoUri", new videoSaver());
-            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "getVideoUri", new videoSaver());
+            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "z", new videoSaver(false));
+            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "z", new videoSaver(true));
 
         }
 
@@ -208,7 +222,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * The getters also save the file paths in the mediaPath var, which we use here.
 		 */
         if (imageSavingMode != SAVE_NEVER)
-            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showImage", new XC_MethodHook() {
+            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "l", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     /**
@@ -222,7 +236,7 @@ public class Keepchat implements IXposedHookLoadPackage {
             });
 
         if (videoSavingMode != SAVE_NEVER)
-            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "showVideo", Context.class, new XC_MethodHook() {
+            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "a", Context.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     /**
@@ -256,28 +270,25 @@ public class Keepchat implements IXposedHookLoadPackage {
             }
         }
 
-        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "markViewed", new askSave());
-        findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "markViewed", new askSave());
+        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "h", new askSave());
+        findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "i", new askSave());
 
 		/** hooking the debug method so that snapchat writes to logcat to help
 		 * figure out what snapchat is doing
 		 */
-		/*findAndHookMethod("com.snapchat.android.Timber", lpparam.classLoader,
-				"debugMode", new XC_MethodReplacement() {
-					@Override
-					protected Object replaceHookedMethod(MethodHookParam param)
-							throws Throwable {
-						XposedBridge.log("Debug on");
-						// the line
-						return true;
-					}
-				});*/
+//		findAndHookMethod("com.snapchat.android.Timber", lpparam.classLoader, "debugMode", new XC_MethodReplacement() {
+//            @Override
+//            protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+//                XposedBridge.log("Debug on");
+//                return true;
+//            }
+//        });
 
 		/**
          * wasScreenshotted() hook
          * This method is called to see if the Snap was screenshotted. Return false.
 		 */
-        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "wasScreenshotted", new XC_MethodReplacement() {
+        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "r", new XC_MethodReplacement() {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                 XposedBridge.log("Not reporting screenshotted. :");
@@ -351,7 +362,7 @@ public class Keepchat implements IXposedHookLoadPackage {
      * @param suffix
      *            The file suffix, either "jpg" or "mp4"
      */
-    private File constructFileObject(Object snapObject, String suffix) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+    private File constructFileObject(Object snapObject, String suffix, Boolean isStory) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         // We construct a path for us to write to based on preferences.
         String root = Environment.getExternalStorageDirectory().toString();
         if (saveLocation != "" ) root = saveLocation;
@@ -362,7 +373,15 @@ public class Keepchat implements IXposedHookLoadPackage {
         if (myDir.mkdirs()) XposedBridge.log("Directory " + myDir.toString() + " was created.");
 
         // Construct the filename. It shall start with the sender's name...
-        String sender = (String) callMethod(snapObject, "getSender");
+        // ReceivedSnap.d()
+        // Story.Z()
+        String sender = "unknown";
+        if (isStory) {
+            sender = (String) callMethod(snapObject, "Z");
+        }
+        else {
+            sender = (String) callMethod(snapObject, "d");
+        }
 
         // ...continue with the current date and time, lexicographically...
         SimpleDateFormat fnameDateFormat = new SimpleDateFormat(
@@ -370,7 +389,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 
         // ReceivedSnap extends the Snap class. getTimestamp() is a member of the Snap class,
         // so we cannot access it via XposedHelpers.callMethod() and have to use our own reflection
-        Date timestamp = new Date((Long) callSuperMethod(snapObject,"getTimestamp"));
+        Date timestamp = new Date((Long) callSuperMethod(snapObject,"K"));
 
         // ...and end in the suffix provided ("jpg" or "mp4")
         String fname = sender + "_" + (fnameDateFormat.format(timestamp)) + "." + suffix;
