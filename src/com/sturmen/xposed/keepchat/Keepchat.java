@@ -63,6 +63,25 @@ public class Keepchat implements IXposedHookLoadPackage {
      */
     private Context context;
 
+    // Define a big list of know function names for versions here
+    private String[] names;
+    final int CLASS_RECEIVEDSNAP = 0;                      // String[0] = ReceivedSnap class name
+    final int FUNCTION_RECEIVEDSNAP_GETIMAGEBITMAP = 1;    // String[1] = ReceivedSnap.getImageBitmap() function name
+    final int FUNCTION_RECEIVEDSNAP_GETVIDEOURI = 2;       // String[2] = ReceivedSnap.getVideoUri() function name
+    final int CLASS_STORY = 3;                             // String[3] = Story class name
+    final int FUNCTION_STORY_GETIMAGEBITMAP = 4;           // String[4] = Story.getImageBitmap() function name
+    final int FUNCTION_STORY_GETVIDEOURI = 5;              // String[5] = Story.getVideoUri() function name
+    final int FUNCTION_RECEIVEDSNAP_MARKVIEWED = 6;        // String[6] = ReceivedSnap.markViewed() function name
+    final int FUNCTION_STORY_MARKVIEWED = 7;               // String[7] = Story.markViewed() function name
+    final int FUNCTION_RECEIVEDSNAP_WASSCREENSHOTTED = 8;  // String[8] = ReceivedSnap.wasScreenshotted() function name
+    final int FUNCTION_RECEIVEDSNAP_MARKSCREENSHOTTED = 9; // String[9] = ReceivedSnap.markScreenshotted() function name
+    final int CLASS_SNAPVIEW = 10;                         // String[10] = SnapView class name
+    final int FUNCTION_SNAPVIEW_SHOWIMAGE = 11;            // String[11] = SnapView.showImage() function name
+    final int FUNCTION_SNAPVIEW_SHOWVIDEO = 12;            // String[12] = SnapView.showVideo() function name
+    final int FUNCTION_RECEIVEDSNAP_GETSENDER = 13;        // String[13] = ReceivedSnap.getSender() function name
+    final int FUNCTION_STORY_GETSENDER = 14;               // String[14] = Story.getSender()
+    final int FUNCTION_SNAP_GETTIMESTAMP = 15;             // String[15] = Snap.getTimestamp()
+
     // Load the preferences for Keepchat
     XSharedPreferences savePrefs = new XSharedPreferences(PACKAGE_NAME);
     final String saveLocation = savePrefs.getString("pref_saveLocation", "");
@@ -89,21 +108,6 @@ public class Keepchat implements IXposedHookLoadPackage {
 
         XposedBridge.log("Keepchat: Snapchat load detected.");
 
-        // Define a big list of know function names for versions here
-        final int CLASS_RECEIVEDSNAP = 0;                      // String[0] = ReceivedSnap class name
-        final int FUNCTION_RECEIVEDSNAP_GETIMAGEBITMAP = 1;    // String[1] = ReceivedSnap.getImageBitmap() function name
-        final int FUNCTION_RECEIVEDSNAP_GETVIDEOURI = 2;       // String[2] = ReceivedSnap.getVideoUri() function name
-        final int CLASS_STORY = 3;                             // String[3] = Story class name
-        final int FUNCTION_STORY_GETIMAGEBITMAP = 4;           // String[4] = Story.getImageBitmap() function name
-        final int FUNCTION_STORY_GETVIDEOURI = 5;              // String[5] = Story.getVideoUri() function name
-        final int FUNCTION_RECEIVEDSNAP_MARKVIEWED = 6;        // String[6] = ReceivedSnap.markViewed() function name
-        final int FUNCTION_STORY_MARKVIEWED = 7;               // String[7] = Story.markViewed() function name
-        final int FUNCTION_RECEIVEDSNAP_WASSCREENSHOTTED = 8;  // String[8] = ReceivedSnap.wasScreenshotted() function name
-        final int FUNCTION_RECEIVEDSNAP_MARKSCREENSHOTTED = 9; // String[9] = ReceivedSnap.markScreenshotted() function name
-        final int CLASS_SNAPVIEW = 10;                         // String[10] = SnapView class name
-        final int FUNCTION_SNAPVIEW_SHOWIMAGE = 11;            // String[11] = SnapView.showImage() function name
-        final int FUNCTION_SNAPVIEW_SHOWVIDEO = 12;            // String[12] = SnapView.showVideo() function name
-
         Map<String, String[]> nameResolution = new HashMap<String, String[]>();
         String basename = "com.snapchat.android.";
         nameResolution.put("original", new String[]{
@@ -119,7 +123,10 @@ public class Keepchat implements IXposedHookLoadPackage {
                 "markScreenshotted",                // String[9] = ReceivedSnap.markScreenshotted() function name
                 basename + "ui.SnapView",           // String[10] = SnapView class name
                 "showImage",                        // String[11] = SnapView.showImage() function name
-                "showVideo"                         // String[12] = SnapView.showVideo() function name
+                "showVideo",                        // String[12] = SnapView.showVideo() function name
+                "getSender",                        // String[13] = ReceivedSnap.getSender() function name
+                "getSender",                        // String[14] = Story.getSender() function name
+                "getTimestamp"                      // String[15] = Snap.getTimestamp() function name
         });
 
         nameResolution.put("1", new String[]{
@@ -135,15 +142,24 @@ public class Keepchat implements IXposedHookLoadPackage {
                 "n",                                // String[9] = ReceivedSnap.markScreenshotted() function name
                 basename + "ui.SnapView",           // String[10] = SnapView class name
                 "l",                                // String[11] = SnapView.showImage() function name
-                "a"                                 // String[12] = SnapView.showVideo() function name
+                "a",                                // String[12] = SnapView.showVideo() function name
+                "d",                                // String[13] = ReceivedSnap.getSender() function name
+                "Z",                                // String[14] = Story.getSender() function name
+                "K"                                 // String[15] = Snap.getTimestamp() function name
+
         });
 
         Map<String, String> versionResolution = new HashMap<String, String>();
         versionResolution.put("4.0.20", "original");
         versionResolution.put("4.0.21 Beta", "1");
 
-        Boolean legacy = versionCompare(versionName, "4.0.20") <= 0;
+        Boolean legacy = false;
 
+        try {
+            legacy = versionCompare(versionName, "4.0.20") <= 0;
+        }
+        catch (Exception e) {}
+        
         // Lookup the function names for current version
         if (!versionResolution.containsKey(versionName) && !legacy) {
             XposedBridge.log("Keepchat: We don't currently support version '" + versionName + "', wait for an update");
@@ -161,7 +177,7 @@ public class Keepchat implements IXposedHookLoadPackage {
         );
 
         if (legacy) versionName = "4.0.20";
-        final String[] names = nameResolution.get(versionResolution.get(versionName));
+        names = nameResolution.get(versionResolution.get(versionName));
 
         if (imageSavingMode != SAVE_NEVER) {
 
@@ -365,7 +381,7 @@ public class Keepchat implements IXposedHookLoadPackage {
         final class wasScreenshotted extends XC_MethodReplacement {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("Not reporting screenshotted. :)");
+                //XposedBridge.log("Not reporting screenshotted. :)");
                 return false;
             }
         }
@@ -379,7 +395,7 @@ public class Keepchat implements IXposedHookLoadPackage {
         final class markScreenshotted extends XC_MethodReplacement {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("Not setting screenshotted. :)");
+                //XposedBridge.log("Not setting screenshotted. :)");
                 return null;
             }
         }
@@ -468,10 +484,10 @@ public class Keepchat implements IXposedHookLoadPackage {
         // Story.Z()
         String sender = "unknown";
         if (isStory) {
-            sender = (String) callMethod(snapObject, "Z");
+            sender = (String) callMethod(snapObject, names[FUNCTION_STORY_GETSENDER]);
         }
         else {
-            sender = (String) callMethod(snapObject, "d");
+            sender = (String) callMethod(snapObject, names[FUNCTION_RECEIVEDSNAP_GETSENDER]);
         }
 
         // ...continue with the current date and time, lexicographically...
@@ -480,7 +496,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 
         // ReceivedSnap extends the Snap class. getTimestamp() is a member of the Snap class,
         // so we cannot access it via XposedHelpers.callMethod() and have to use our own reflection
-        Date timestamp = new Date((Long) callSuperMethod(snapObject,"K"));
+        Date timestamp = new Date((Long) callSuperMethod(snapObject, names[FUNCTION_SNAP_GETTIMESTAMP]));
 
         // ...and end in the suffix provided ("jpg" or "mp4")
         String fname = sender + "_" + (fnameDateFormat.format(timestamp)) + "." + suffix;
@@ -573,8 +589,8 @@ public class Keepchat implements IXposedHookLoadPackage {
      * @return 1 if str2 is higher than str1
      */
     private Integer versionCompare(String str1, String str2) {
-        String[] vals1 = str1.split("\\.");
-        String[] vals2 = str2.split("\\.");
+        String[] vals1 = str1.replaceAll("[^0-9.]","").split("\\.");
+        String[] vals2 = str2.replaceAll("[^0-9.]","").split("\\.");
         int i=0;
         while(i<vals1.length && i<vals2.length && vals1[i].equals(vals2[i])) {
             i++;
