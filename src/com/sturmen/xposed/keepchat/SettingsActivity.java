@@ -126,7 +126,7 @@ public class SettingsActivity extends Activity {
                 ArrayList list = new ArrayList();
                 String line;
                 while ((line = bufReader.readLine()) != null) {
-                    if (line.contains("vfat") || line.contains("/mnt")) {
+                    if (line.contains("vfat") || line.contains("/mnt") || line.contains("fuse") ) {
                         StringTokenizer tokens = new StringTokenizer(line, " ");
                         String s = tokens.nextToken();
                         s = tokens.nextToken(); // Take the second token, i.e. mount point
@@ -135,7 +135,12 @@ public class SettingsActivity extends Activity {
                             list.add(s);
                         }
                         else if (line.contains("/dev/block/vold")) {
-                            if (!line.contains("/mnt/secure") && !line.contains("/mnt/asec") && !line.contains("/mnt/obb") && !line.contains("/dev/mapper") && !line.contains("tmpfs")) {
+                            if (!line.contains("/mnt/secure") && !line.contains("/mnt/asec") && !line.contains("/mnt/obb") && !line.contains("/dev/mapper") && !line.contains("tmpfs") && line.contains("rw")) {
+                                list.add(s);
+                            }
+                        }
+                        else if (line.contains("fuse")) {
+                            if (line.contains("/storage/") && line.contains("rw")) {
                                 list.add(s);
                             }
                         }

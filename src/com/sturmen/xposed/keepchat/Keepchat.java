@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.graphics.Bitmap;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
@@ -17,7 +18,9 @@ import java.io.FileOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -27,6 +30,8 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 import static de.robv.android.xposed.XposedHelpers.callMethod;
+import static de.robv.android.xposed.XposedHelpers.callStaticMethod;
+import static de.robv.android.xposed.XposedHelpers.findClass;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 
 public class Keepchat implements IXposedHookLoadPackage {
@@ -68,16 +73,95 @@ public class Keepchat implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals("com.snapchat.android"))
             return;
-        else
-            XposedBridge.log("Keepchat: Snapchat load detected.");
 
-        XposedBridge.log(
-            "Loaded saving preferences: "
-            + "Location" + saveLocation + ", "
-            + "Images -> " + imageSavingMode + ", "
-            + "Videos -> " + videoSavingMode + ", "
-            + "Toast -> " + toastMode
+        // Get Snapchat version info
+        String versionName;
+        try {
+            Object activityThread = callStaticMethod(findClass("android.app.ActivityThread", null), "currentActivityThread");
+            Context context = (Context) callMethod(activityThread, "getSystemContext");
+            PackageInfo pi = context.getPackageManager().getPackageInfo(lpparam.packageName, 0);
+            versionName = pi.versionName;
+        }
+        catch (Exception e) {
+            XposedBridge.log("Keepchat: Exception while trying to get version info. (" + e.getMessage() + ")");
+            return;
+        }
+
+        XposedBridge.log("Keepchat: Snapchat load detected.");
+
+        // Define a big list of know function names for versions here
+        final int CLASS_RECEIVEDSNAP = 0;                      // String[0] = ReceivedSnap class name
+        final int FUNCTION_RECEIVEDSNAP_GETIMAGEBITMAP = 1;    // String[1] = ReceivedSnap.getImageBitmap() function name
+        final int FUNCTION_RECEIVEDSNAP_GETVIDEOURI = 2;       // String[2] = ReceivedSnap.getVideoUri() function name
+        final int CLASS_STORY = 3;                             // String[3] = Story class name
+        final int FUNCTION_STORY_GETIMAGEBITMAP = 4;           // String[4] = Story.getImageBitmap() function name
+        final int FUNCTION_STORY_GETVIDEOURI = 5;              // String[5] = Story.getVideoUri() function name
+        final int FUNCTION_RECEIVEDSNAP_MARKVIEWED = 6;        // String[6] = ReceivedSnap.markViewed() function name
+        final int FUNCTION_STORY_MARKVIEWED = 7;               // String[7] = Story.markViewed() function name
+        final int FUNCTION_RECEIVEDSNAP_WASSCREENSHOTTED = 8;  // String[8] = ReceivedSnap.wasScreenshotted() function name
+        final int FUNCTION_RECEIVEDSNAP_MARKSCREENSHOTTED = 9; // String[9] = ReceivedSnap.markScreenshotted() function name
+        final int CLASS_SNAPVIEW = 10;                         // String[10] = SnapView class name
+        final int FUNCTION_SNAPVIEW_SHOWIMAGE = 11;            // String[11] = SnapView.showImage() function name
+        final int FUNCTION_SNAPVIEW_SHOWVIDEO = 12;            // String[12] = SnapView.showVideo() function name
+
+        Map<String, String[]> nameResolution = new HashMap<String, String[]>();
+        String basename = "com.snapchat.android.";
+        nameResolution.put("original", new String[]{
+                basename + "model.ReceivedSnap",    // String[0] = ReceivedSnap class name
+                "getImageBitmap",                   // String[1] = ReceivedSnap.getImageBitmap() function name
+                "getVideoUri",                      // String[2] = ReceivedSnap.getVideoUri() function name
+                basename + "model.Story",           // String[3] = Story class name
+                "getImageBitmap",                   // String[4] = Story.getImageBitmap() function name
+                "getVideoUri",                      // String[5] = Story.getVideoUri() function name
+                "markViewed",                       // String[6] = ReceivedSnap.markViewed() function name
+                "markViewed",                       // String[7] = Story.markViewed() function name
+                "wasScreenshotted",                 // String[8] = ReceivedSnap.wasScreenshotted() function name
+                "markScreenshotted",                // String[9] = ReceivedSnap.markScreenshotted() function name
+                basename + "ui.SnapView",           // String[10] = SnapView class name
+                "showImage",                        // String[11] = SnapView.showImage() function name
+                "showVideo"                         // String[12] = SnapView.showVideo() function name
+        });
+
+        nameResolution.put("1", new String[]{
+                basename + "model.ReceivedSnap",    // String[0] = ReceivedSnap class name
+                "a",                                // String[1] = ReceivedSnap.getImageBitmap() function name
+                "z",                                // String[2] = ReceivedSnap.getVideoUri() function name
+                basename + "model.Story",           // String[3] = Story class name
+                "a",                                // String[4] = Story.getImageBitmap() function name
+                "z",                                // String[5] = Story.getVideoUri() function name
+                "h",                                // String[6] = ReceivedSnap.markViewed() function name
+                "i",                                // String[7] = Story.markViewed() function name
+                "r",                                // String[8] = ReceivedSnap.wasScreenshotted() function name
+                "n",                                // String[9] = ReceivedSnap.markScreenshotted() function name
+                basename + "ui.SnapView",           // String[10] = SnapView class name
+                "l",                                // String[11] = SnapView.showImage() function name
+                "a"                                 // String[12] = SnapView.showVideo() function name
+        });
+
+        Map<String, String> versionResolution = new HashMap<String, String>();
+        versionResolution.put("4.0.20", "original");
+        versionResolution.put("4.0.21 Beta", "1");
+
+        Boolean legacy = versionCompare(versionName, "4.0.20") <= 0;
+
+        // Lookup the function names for current version
+        if (!versionResolution.containsKey(versionName) && !legacy) {
+            XposedBridge.log("Keepchat: We don't currently support version '" + versionName + "', wait for an update");
+            XposedBridge.log("Keepchat: If you can pull the apk off your device, submit it to the xda thread");
+            return;
+        }
+
+        XposedBridge.log(""
+                + "Keepchat: Detected version '" + versionName + "' which is supported! "
+                + "Loaded saving preferences: "
+                + "Location" + saveLocation + ", "
+                + "Images -> " + imageSavingMode + ", "
+                + "Videos -> " + videoSavingMode + ", "
+                + "Toast -> " + toastMode
         );
+
+        if (legacy) versionName = "4.0.20";
+        final String[] names = nameResolution.get(versionResolution.get(versionName));
 
         if (imageSavingMode != SAVE_NEVER) {
 
@@ -134,8 +218,8 @@ public class Keepchat implements IXposedHookLoadPackage {
              * We hook this method to intercept the result and write it to the SD card.
              * The file path is stored in the mediaPath member for later use in the showImage() hook.
              */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "a", Context.class, new imageSaver(false));
-            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "a", Context.class, new imageSaver(true));
+            findAndHookMethod(names[CLASS_RECEIVEDSNAP], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_GETIMAGEBITMAP], Context.class, new imageSaver(false));
+            findAndHookMethod(names[CLASS_STORY], lpparam.classLoader, names[FUNCTION_STORY_GETIMAGEBITMAP], Context.class, new imageSaver(true));
         }
 
         if (videoSavingMode != SAVE_NEVER) {
@@ -205,8 +289,8 @@ public class Keepchat implements IXposedHookLoadPackage {
              *
              * The file path is stored in the mediaPath member for later use in the showVideo() hook.
              */
-            findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "z", new videoSaver(false));
-            findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "z", new videoSaver(true));
+            findAndHookMethod(names[CLASS_RECEIVEDSNAP], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_GETVIDEOURI], new videoSaver(false));
+            findAndHookMethod(names[CLASS_STORY], lpparam.classLoader, names[FUNCTION_STORY_GETVIDEOURI], new videoSaver(true));
 
         }
 
@@ -222,7 +306,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 		 * The getters also save the file paths in the mediaPath var, which we use here.
 		 */
         if (imageSavingMode != SAVE_NEVER)
-            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "l", new XC_MethodHook() {
+            findAndHookMethod(names[CLASS_SNAPVIEW], lpparam.classLoader, names[FUNCTION_SNAPVIEW_SHOWIMAGE], new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     /**
@@ -236,7 +320,7 @@ public class Keepchat implements IXposedHookLoadPackage {
             });
 
         if (videoSavingMode != SAVE_NEVER)
-            findAndHookMethod("com.snapchat.android.ui.SnapView", lpparam.classLoader, "a", Context.class, new XC_MethodHook() {
+            findAndHookMethod(names[CLASS_SNAPVIEW], lpparam.classLoader, names[FUNCTION_SNAPVIEW_SHOWVIDEO], Context.class, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     /**
@@ -251,6 +335,7 @@ public class Keepchat implements IXposedHookLoadPackage {
 
 
 		/*
+		 * markViewed() hooks
 		 * Created a common class for both of the markViewed hooks as they are the
 		 * same for saving both the received snaps and stories.
 		 */
@@ -270,31 +355,37 @@ public class Keepchat implements IXposedHookLoadPackage {
             }
         }
 
-        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "h", new askSave());
-        findAndHookMethod("com.snapchat.android.model.Story", lpparam.classLoader, "i", new askSave());
-
-		/** hooking the debug method so that snapchat writes to logcat to help
-		 * figure out what snapchat is doing
-		 */
-//		findAndHookMethod("com.snapchat.android.Timber", lpparam.classLoader, "debugMode", new XC_MethodReplacement() {
-//            @Override
-//            protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-//                XposedBridge.log("Debug on");
-//                return true;
-//            }
-//        });
+        findAndHookMethod(names[CLASS_RECEIVEDSNAP], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_MARKVIEWED], new askSave());
+        findAndHookMethod(names[CLASS_STORY], lpparam.classLoader, names[FUNCTION_STORY_MARKVIEWED], new askSave());
 
 		/**
          * wasScreenshotted() hook
          * This method is called to see if the Snap was screenshotted. Return false.
 		 */
-        findAndHookMethod("com.snapchat.android.model.ReceivedSnap", lpparam.classLoader, "r", new XC_MethodReplacement() {
+        final class wasScreenshotted extends XC_MethodReplacement {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("Not reporting screenshotted. :");
+                XposedBridge.log("Not reporting screenshotted. :)");
                 return false;
             }
-        });
+        }
+        findAndHookMethod(names[CLASS_RECEIVEDSNAP], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_WASSCREENSHOTTED], new wasScreenshotted());
+        //findAndHookMethod(names[CLASS_STORY], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_WASSCREENSHOTTED], new wasScreenshotted());
+
+        /**
+         * markScreenshotted() hook
+         * This method is called mark Snap as screenshotted. Return void.
+         */
+        final class markScreenshotted extends XC_MethodReplacement {
+            @Override
+            protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+                XposedBridge.log("Not setting screenshotted. :)");
+                return null;
+            }
+        }
+        findAndHookMethod(names[CLASS_RECEIVEDSNAP], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_MARKSCREENSHOTTED], new markScreenshotted());
+        //findAndHookMethod(names[CLASS_STORY], lpparam.classLoader, names[FUNCTION_RECEIVEDSNAP_MARKSCREENSHOTTED], new markScreenshotted());
+
     } // END handleLoadPackage
 
     /*
@@ -475,4 +566,25 @@ public class Keepchat implements IXposedHookLoadPackage {
         return obj.getClass().getMethod(methodName).invoke(obj);
     }
 
+    /**
+     * Compare two version strings
+     * @return  -1 if str1 is lower than str2
+     * @return 0 if both version are the same
+     * @return 1 if str2 is higher than str1
+     */
+    private Integer versionCompare(String str1, String str2) {
+        String[] vals1 = str1.split("\\.");
+        String[] vals2 = str2.split("\\.");
+        int i=0;
+        while(i<vals1.length && i<vals2.length && vals1[i].equals(vals2[i])) {
+            i++;
+        }
+
+        if (i<vals1.length && i<vals2.length) {
+            int diff = Integer.valueOf(vals1[i]).compareTo(Integer.valueOf(vals2[i]));
+            return Integer.signum(diff);
+        }
+
+        return Integer.signum(vals1.length - vals2.length);
+    }
 }
