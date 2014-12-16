@@ -1,5 +1,5 @@
 ## Project moved!
-I stopped developing this mod, @TheRamis picked up development at https://github.com/TheRamis/KeepChat
+I stopped developing this mod, @P1nGu1n picked up development at https://github.com/P1nGu1n/KeepChat
 After the Snapchat devs introduced the usage of *Proguard*, it's not fun anymore... ;)
 
 Keepchat
